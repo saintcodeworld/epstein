@@ -48,12 +48,27 @@ export default function RunnerGame() {
     const [gameState, setGameState] = useState<GameState>("START");
     const [score, setScore] = useState(0);
     const [highScore, setHighScore] = useState(0);
+    const [balance, setBalance] = useState(0);
     const [showSettings, setShowSettings] = useState(false);
     const [showWithdraw, setShowWithdraw] = useState(false);
     const [withdrawSuccess, setWithdrawSuccess] = useState(false);
 
+    // Load balance from localStorage on mount
+    useEffect(() => {
+        const savedBalance = localStorage.getItem('gameBalance');
+        if (savedBalance) {
+            setBalance(parseInt(savedBalance, 10));
+        }
+    }, []);
+
+    // Save balance to localStorage whenever it changes
+    useEffect(() => {
+        localStorage.setItem('gameBalance', balance.toString());
+    }, [balance]);
+
     // We use a ref to store mutable game state so the animation loop doesn't need to depend on React state
     const enemyImageRef = useRef<HTMLImageElement | null>(null);
+    const pointsAddedRef = useRef(false); // Track if points have been added for this game session
 
 
     const playerVideoRef = useRef<HTMLVideoElement | null>(null); // Hidden video source
@@ -117,6 +132,7 @@ export default function RunnerGame() {
             isRunning: true,
         };
         setScore(0);
+        pointsAddedRef.current = false; // Reset so points can be added on next game over
         setGameState("PLAYING");
     }, []);
 
@@ -548,9 +564,15 @@ export default function RunnerGame() {
 
             {/* HUD */}
             <div className="absolute top-16 left-0 right-0 px-10 flex justify-between items-center z-10 text-white pointer-events-none">
-                <div className="flex flex-col bg-black/80 p-3 border-2 border-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-                    <span className="text-[10px] text-neutral-400 uppercase tracking-widest mb-1">Score</span>
-                    <span className="text-3xl font-bold font-mono tracking-tighter">{Math.floor(score).toString().padStart(6, '0')}</span>
+                <div className="flex flex-col gap-2">
+                    <div className="flex flex-col bg-emerald-900/80 p-3 border-2 border-emerald-400 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                        <span className="text-[10px] text-emerald-300 uppercase tracking-widest mb-1">Balance</span>
+                        <span className="text-2xl font-bold font-mono tracking-tighter text-emerald-400">{balance.toLocaleString()}</span>
+                    </div>
+                    <div className="flex flex-col bg-black/80 p-3 border-2 border-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                        <span className="text-[10px] text-neutral-400 uppercase tracking-widest mb-1">Score</span>
+                        <span className="text-3xl font-bold font-mono tracking-tighter">{Math.floor(score).toString().padStart(6, '0')}</span>
+                    </div>
                 </div>
                 <div className="flex flex-col items-end bg-black/80 p-3 border-2 border-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
                     <span className="text-[10px] text-neutral-400 uppercase tracking-widest mb-1">High Score</span>
@@ -610,6 +632,16 @@ export default function RunnerGame() {
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
+                        onAnimationStart={() => {
+                            // Add score to balance when game over screen appears (only once)
+                            if (!pointsAddedRef.current) {
+                                const earnedPoints = Math.floor(score);
+                                if (earnedPoints > 0) {
+                                    setBalance(prev => prev + earnedPoints);
+                                }
+                                pointsAddedRef.current = true;
+                            }
+                        }}
                         className="absolute inset-0 flex items-center justify-center bg-red-900/40 backdrop-blur-md z-30"
                     >
                         <div className="text-center bg-black/90 p-12 border-4 border-red-600 shadow-[12px_12px_0px_0px_rgba(0,0,0,1)]">
@@ -620,8 +652,11 @@ export default function RunnerGame() {
                             >
                                 WASTED
                             </motion.div>
-                            <div className="text-2xl text-red-200 mb-8 font-bold">
+                            <div className="text-2xl text-red-200 mb-4 font-bold">
                                 FINAL SCORE: {Math.floor(score)}
+                            </div>
+                            <div className="text-lg text-emerald-400 mb-8 font-bold">
+                                +{Math.floor(score)} added to balance
                             </div>
                             <button
                                 onClick={resetGame}
@@ -718,8 +753,8 @@ export default function RunnerGame() {
                             </div>
 
                             <div className="flex justify-between items-center mb-8 px-5 py-4 bg-neutral-950 border-2 border-neutral-800">
-                                <span className="text-neutral-400 text-[10px] font-bold uppercase tracking-wider">Available Points</span>
-                                <span className="text-2xl font-mono font-bold text-white tracking-tight">{Math.floor(score)}</span>
+                                <span className="text-neutral-400 text-[10px] font-bold uppercase tracking-wider">Available Balance</span>
+                                <span className="text-2xl font-mono font-bold text-emerald-400 tracking-tight">{balance.toLocaleString()}</span>
                             </div>
 
                             <div className="bg-neutral-950 border-2 border-neutral-800 p-4 mb-4 flex justify-between items-center">
@@ -729,13 +764,14 @@ export default function RunnerGame() {
 
                             <button
                                 onClick={() => {
-                                    if (Math.floor(score) >= MIN_WITHDRAWAL_POINTS) {
+                                    if (balance >= MIN_WITHDRAWAL_POINTS) {
                                         setWithdrawSuccess(true);
                                         setShowWithdraw(false);
+                                        setBalance(0); // Clear balance after withdrawal
                                     }
                                 }}
-                                disabled={Math.floor(score) < MIN_WITHDRAWAL_POINTS}
-                                className={`w-full py-4 font-bold border-b-8 border-r-8 flex items-center justify-center gap-2 transition-all ${Math.floor(score) >= MIN_WITHDRAWAL_POINTS
+                                disabled={balance < MIN_WITHDRAWAL_POINTS}
+                                className={`w-full py-4 font-bold border-b-8 border-r-8 flex items-center justify-center gap-2 transition-all ${balance >= MIN_WITHDRAWAL_POINTS
                                     ? "bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-900 active:border-0 active:translate-y-2 active:translate-x-2"
                                     : "bg-neutral-700 text-neutral-400 border-neutral-900 cursor-not-allowed opacity-50"
                                     }`}
